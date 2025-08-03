@@ -78,6 +78,5 @@ export async function main() {
   // const csvOutput = Papa.unparse(jun25CombinedEntriesExits);
   // await fs.writeFile('data/taps-jun25.csv', csvOutput);
   // console.log('Saved to taps-jun25.csv');
-
   return stationMap;
 }

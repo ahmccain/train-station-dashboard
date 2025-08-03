@@ -59,14 +59,14 @@ function filterStationsStops(stopData: StopDataRow[], stationWithTapDataMap: Map
 }
 
 export async function main(tapDataMap: Map<string, CombinedTapRow>) {
-  const data = await loadStopData('data/full_greater_sydney_gtfs_static_0/stops.txt');
+  const data = await loadStopData('data/station-and-stops.csv');
   
   const stationAndStop = filterStationsStops(data, tapDataMap);
-  console.log(`Filtered ${stationAndStop.length} rows for Stations & Stops`);
+  // console.log(`Filtered ${stationAndStop.length} rows for Stations & Stops`);
 
-  const csvOutput = Papa.unparse(stationAndStop);
-  await fs.writeFile('data/station-and-stops.csv', csvOutput);
-  console.log('Saved to station-and-stops.csv');
+  // const csvOutput = Papa.unparse(stationAndStop);
+  // await fs.writeFile('data/station-and-stops.csv', csvOutput);
+  // console.log('Saved to station-and-stops.csv');
 
   return stationAndStop;
 }

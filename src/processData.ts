@@ -32,7 +32,7 @@ function linkIdToStations(stationMap: Map<string, CombinedTapRow>, stopData: Sto
   // 4 cases, typical stations, domestic, international and platform
   for (const row of stopData) {
     const stationNameInTapData = row.stop_name.replace('Station', '').trim();
-    if ((stationMap.has(stationNameInTapData))) {
+    if ((stationMap.has(stationNameInTapData) && row.location_type === '1')) {
       idStationMap.set(row.stop_id, {
         id: row.stop_id,
         name: stationNameInTapData,
@@ -113,19 +113,6 @@ function countStopTimesForStationsAndPlatforms(stopTimeData: StopTimeRow[], maps
   }
 }
 
-function countStopTimesForStationsAndNonPlatforms(stopTimeData: StopTimeRow[], maps: {idStationMap: Map<string, TrainStation>, nonPlatformStationIdMap: Map<string, string>}) {
-  const nonPlatformStationIdMap = maps.nonPlatformStationIdMap;
-  const idStationMap = maps.idStationMap;
-  for (const row of stopTimeData) {
-    const stationId = nonPlatformStationIdMap.get(row.stop_id);
-    const station = idStationMap.get(stationId!);
-
-    station!.totalPlatformsStopTimeCount += 1;
-    const nonPlatform = station!.nonPlatforms.find((nonPlatform) => nonPlatform.id === row.stop_id);
-    nonPlatform!.stopTimeCount += 1;
-  }
-}
-
 function logTapsToStopTimesRatio(idStationMap: Map<string, TrainStation>) {
   // arbitrary ratio assuming time period of stop_times is consistent amongst all stations. round <50 to 50 (probably too small to matter)
   for (const station of idStationMap.values()) {
@@ -140,11 +127,14 @@ function logTapsToStopTimesRatio(idStationMap: Map<string, TrainStation>) {
     } else {
       totalTaps += parseInt(station.exits, 10);
     }
-    const ratio = totalTaps/station.totalPlatformsStopTimeCount;
-    if (0 < ratio && ratio < 1) {
-      console.log(`${station.name} has a ratio of ${ratio} total taps to trains stopping`);
+    const ratio = totalTaps/station.totalNonPlatformsStopTimeCount;
+    // TODO look at miranda
+    if (true) {
+      // console.log(`${station.name} has a ratio of ${ratio} total taps to supp transport stopping`);
+      console.log(`${station.name} ${station.totalNonPlatformsStopTimeCount}`);
     }
   }
+  console.log(idStationMap.size);
 }
 
 function logStopTimesForAllPlatforms(idStationMap: Map<string, TrainStation>) {
@@ -170,8 +160,8 @@ async function main() {
   // already filtered so that every stop id is a platform found in a tap data station
   const stopTimeData = await loadStopTimeData('data/stop-times-for-matching-stops.csv');
   countStopTimesForStationsAndPlatforms(stopTimeData, tapDataWithIdMap);
-  // logTapsToStopTimesRatio(idStationMap);
-  logStopTimesForAllPlatforms(idStationMap);
+  logTapsToStopTimesRatio(idStationMap);
+  // logStopTimesForAllPlatforms(idStationMap);
 
 }
 
