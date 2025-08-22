@@ -65,18 +65,16 @@ function combineEntriesAndExits(data: TapDataRow[]): Map<string, CombinedTapRow>
 
 // Example usage
 export async function main() {
-  const data = await loadTapData('data/train-station-entries-and-exits-data_july-2025.csv');
-
-  // Example: Filter Jun-25 entries
-  const jun25 = data.filter(row => row.MonthYear.trim() === 'Jun-25');
-  const stationMap = combineEntriesAndExits(jun25);
-  
-  // const jun25CombinedEntriesExits = Array.from(stationMap.values());
-  // console.log(`Filtered and combined ${jun25CombinedEntriesExits.length} rows for Jun-25`);
+  const data = await loadTapData('data/train-station-entries-and-exits-data.csv');
+  // Example: Filter specific month entries
+  const monthData = data.filter(row => row.MonthYear.trim() === 'Jul-25');
+  const stationMap = combineEntriesAndExits(monthData);
+  const monthCombinedEntriesExits = Array.from(stationMap.values());
+  console.log(`Filtered and combined ${monthCombinedEntriesExits.length} rows for Jul-25`);
 
   // Save to new file
-  // const csvOutput = Papa.unparse(jun25CombinedEntriesExits);
-  // await fs.writeFile('data/taps-jun25.csv', csvOutput);
-  // console.log('Saved to taps-jun25.csv');
+  const csvOutput = Papa.unparse(monthCombinedEntriesExits);
+  await fs.writeFile('data/taps-jul25.csv', csvOutput);
+  console.log('Saved to taps-jul25.csv');
   return stationMap;
 }

@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import Papa from 'papaparse';
 import { TrainStation } from './processData';
 
-//trip_id,arrival_time,departure_time,stop_id,stop_sequence,
+// trip_id,arrival_time,departure_time,stop_id,stop_sequence,
 // stop_headsign,pickup_type,drop_off_type,shape_dist_traveled,timepoint,stop_note
 
 export type StopTimeRow = {
@@ -38,10 +38,12 @@ export async function loadStopTimeData(filePath: string): Promise<StopTimeRow[]>
     return [];
   }
 }
+
 // one and done, don't rerun on original dataset
 // changed from only platforms to now all stops (platforms/bus stands etc)
 export async function main(maps: {idStationMap: Map<string, TrainStation>, platformStationIdMap: Map<string, string>, stopStationIdMap: Map<string, string>}) {
   const data = await loadStopTimeData('data/full_greater_sydney_gtfs_static_0/stop_times.txt');
+  
   // filter stop times for platform ids and station ids (but no stations ids exist)
   // reduces from ~5m rows to ~1.3m
   const stopTimesForStopsWithStationTapData = data.filter(row => (maps.platformStationIdMap.has(row.stop_id) || maps.idStationMap.has(row.stop_id) || maps.stopStationIdMap.has(row.stop_id)));

@@ -2,7 +2,8 @@ import * as fs from 'fs/promises';
 import Papa from 'papaparse';
 import { main as getFilteredTapData, CombinedTapRow } from './preprocessTapData';
 import { main as getFilteredStopData, StopDataRow } from './preprocessStopData';
-import { main as getStopTimeData, loadStopTimeData, StopTimeRow} from './preprocessStopTimeData';
+import { main as getStopTimeFullData, loadStopTimeData, StopTimeRow} from './preprocessStopTimeData';
+import { main as getFilteredTripData } from './preprocessTripData';
 
 type Stop = {
   id: string;
@@ -18,17 +19,21 @@ export type TrainStation = {
   nonPlatforms: Stop[];
   entries: string;
   exits: string;
+  dailyTaps: number;
   totalPlatformsStopTimeCount: number;
   totalNonPlatformsStopTimeCount: number;
+  lat: number;
+  long: number;
+  platformRatio: number;
+  nonPlatformRatio: number;
 }
 
-// 2 maps, one of id:stationName and one of platformid:stationid
-// make id:stationName first so that you can attach platform list after
+// returns 3 maps as stationId:TrainStation, platformId:stationId, nonPlatformId:stationId. (misses some bus stops)
 function linkIdToStations(stationMap: Map<string, CombinedTapRow>, stopData: StopDataRow[]) {
   const idStationMap = new Map<string, TrainStation>();
   const platformStationIdMap = new Map<string, string>();
   const stopStationIdMap = new Map<string, string>();
-
+  
   // 4 cases, typical stations, domestic, international and platform
   for (const row of stopData) {
     const stationNameInTapData = row.stop_name.replace('Station', '').trim();
@@ -41,7 +46,12 @@ function linkIdToStations(stationMap: Map<string, CombinedTapRow>, stopData: Sto
         entries: stationMap.get(stationNameInTapData)!.entries,
         exits: stationMap.get(stationNameInTapData)!.exits,
         totalPlatformsStopTimeCount: 0,
-        totalNonPlatformsStopTimeCount: 0
+        totalNonPlatformsStopTimeCount: 0,
+        lat: parseFloat(row.stop_lat),
+        long: parseFloat(row.stop_lon),
+        dailyTaps: 0,
+        platformRatio: 0,
+        nonPlatformRatio: 0
       });
     } else if (row.stop_name === 'Sydney Domestic Airport Station') {
       idStationMap.set(row.stop_id, {
@@ -52,7 +62,12 @@ function linkIdToStations(stationMap: Map<string, CombinedTapRow>, stopData: Sto
         entries: stationMap.get('Domestic')!.entries,
         exits: stationMap.get('Domestic')!.exits,
         totalPlatformsStopTimeCount: 0,
-        totalNonPlatformsStopTimeCount: 0
+        totalNonPlatformsStopTimeCount: 0,
+        lat: -33.93362984,
+        long: 151.18065972,
+        dailyTaps: 0,
+        platformRatio: 0,
+        nonPlatformRatio: 0
       });
     } else if (row.stop_name === 'Sydney International Airport Station') {
       idStationMap.set(row.stop_id, {
@@ -63,7 +78,12 @@ function linkIdToStations(stationMap: Map<string, CombinedTapRow>, stopData: Sto
         entries: stationMap.get('International')!.entries,
         exits: stationMap.get('International')!.exits,
         totalPlatformsStopTimeCount: 0,
-        totalNonPlatformsStopTimeCount: 0
+        totalNonPlatformsStopTimeCount: 0,
+        lat: -33.93497091,
+        long: 151.16584068,
+        dailyTaps: 0,
+        platformRatio: 0,
+        nonPlatformRatio: 0
       });
     } else if (row.stop_name.includes('Platform')) {
       platformStationIdMap.set(row.stop_id, row.parent_station);
@@ -111,10 +131,7 @@ function countStopTimesForStationsAndPlatforms(stopTimeData: StopTimeRow[], maps
       stop!.stopTimeCount += 1;
     }
   }
-}
 
-function logTapsToStopTimesRatio(idStationMap: Map<string, TrainStation>) {
-  // arbitrary ratio assuming time period of stop_times is consistent amongst all stations. round <50 to 50 (probably too small to matter)
   for (const station of idStationMap.values()) {
     let totalTaps = 0;
     if (station.entries === 'Less than 50') {
@@ -127,14 +144,14 @@ function logTapsToStopTimesRatio(idStationMap: Map<string, TrainStation>) {
     } else {
       totalTaps += parseInt(station.exits, 10);
     }
-    const ratio = totalTaps/station.totalNonPlatformsStopTimeCount;
-    // TODO look at miranda
-    if (true) {
-      // console.log(`${station.name} has a ratio of ${ratio} total taps to supp transport stopping`);
-      console.log(`${station.name} ${station.totalNonPlatformsStopTimeCount}`);
-    }
+    const platformRatio = totalTaps/station.totalPlatformsStopTimeCount;
+    // some stations have missing bus stands so ratio is at best lowest?
+    const nonPlatformRatio = totalTaps/station.totalNonPlatformsStopTimeCount;
+    // TODO look at miranda for missing bus stop links
+    station.dailyTaps = Math.round(totalTaps/30);
+    station.platformRatio = Math.round(platformRatio * 100) / 100;
+    station.nonPlatformRatio = Math.round(nonPlatformRatio * 100) / 100;
   }
-  console.log(idStationMap.size);
 }
 
 function logStopTimesForAllPlatforms(idStationMap: Map<string, TrainStation>) {
@@ -146,23 +163,45 @@ function logStopTimesForAllPlatforms(idStationMap: Map<string, TrainStation>) {
   }
 }
 
+function stationToGeoJSON(station: TrainStation) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "Point",
+      coordinates: [station.long, station.lat]
+    },
+    properties: {
+      name: station.name,
+      dailyTaps: station.dailyTaps,
+      platformRatio: station.platformRatio,  
+      nonPlatformRatio: station.nonPlatformRatio,   
+    }
+  };
+}
 
-async function main() {
+function stationsToFeatureCollection(stations: TrainStation[]) {
+  return {
+    type: "FeatureCollection",
+    features: stations.map(stationToGeoJSON)
+  }
+}
+
+export async function main() {
   const tapDataMap = await getFilteredTapData();
   const stopData = await getFilteredStopData(tapDataMap);
   const tapDataWithIdMap = linkIdToStations(tapDataMap, stopData);
   const idStationMap = tapDataWithIdMap.idStationMap;
-  const platformStationIdMap = tapDataWithIdMap.platformStationIdMap;
-
-  // const stopTimeData = await getStopTimeData(tapDataWithIdMap);
-  
 
   // already filtered so that every stop id is a platform found in a tap data station
   const stopTimeData = await loadStopTimeData('data/stop-times-for-matching-stops.csv');
   countStopTimesForStationsAndPlatforms(stopTimeData, tapDataWithIdMap);
-  logTapsToStopTimesRatio(idStationMap);
   // logStopTimesForAllPlatforms(idStationMap);
 
+  const JSON_string = JSON.stringify(stationsToFeatureCollection(Array.from(idStationMap.values())));
+  await fs.writeFile('data/stations.geojson', JSON_string);
+  console.log('Saved to stations.geojson');
+
+  return idStationMap;
 }
 
 main();
